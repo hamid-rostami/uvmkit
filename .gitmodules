@@ -1,0 +1,3 @@
+[submodule "uvm32"]
+	path = uvm32
+	url = git@github.com:hamid-rostami/uvm32.git
