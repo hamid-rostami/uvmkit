@@ -14,10 +14,8 @@ idf_component_register(
 )
 
 target_compile_definitions(${COMPONENT_LIB} PUBLIC
-    UVM32_MEMORY_SIZE=1048576
+    UVM32_MEMORY_SIZE=${CONFIG_UVMKIT_UVM32_MEMORY_SIZE}
     UVM32_ERROR_STRINGS
-    GDBSTUB_ARCH_UVM32
-    GDBSTUB_IMPLEMENTATION
 )
 
 else()
@@ -29,10 +27,12 @@ project(uvmkit-project
         DESCRIPTION "UVMKIT Project"
         LANGUAGES C ASM)
 
+set(UVM32_MEMORY_SIZE 1048576 CACHE STRING "UVM32 memory size in bytes")
+
 # -- uvm32 --
 add_library(uvm32 STATIC "./uvm32/uvm32/uvm32.c")
 target_include_directories(uvm32 PUBLIC "./uvm32/uvm32" "./uvm32/common")
-target_compile_definitions(uvm32 PUBLIC UVM32_MEMORY_SIZE=1048576) # 1MB
+target_compile_definitions(uvm32 PUBLIC UVM32_MEMORY_SIZE=${UVM32_MEMORY_SIZE})
 target_compile_definitions(uvm32 PUBLIC UVM32_ERROR_STRINGS)
 
 # -- gdbstub --

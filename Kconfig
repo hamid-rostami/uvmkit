@@ -1,0 +1,10 @@
+menu "uvmkit"
+
+config UVM32_MEMORY_SIZE
+	int "UVM32 memory size in bytes"
+	range 4096 16777216
+	default 1048576
+	help
+		Sets the RAM size allocated for each UVM32 instance.
+
+endmenu
