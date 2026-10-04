@@ -55,15 +55,19 @@ int main() {
             client_fd);
     println(buffer);
 
-    int n = recv(client_fd,
-                 buffer,
-                 1, /*sizeof(buffer),*/
-                 0);
+    while (1) {
+      int n = recv(client_fd,
+                   buffer,
+                   sizeof(buffer),
+                   0);
 
-    //sprintf(buffer, "Received %d bytes\n", n);
-    //println(buffer);
-
-    (void) send(client_fd, buffer, 1, 0);
+      if (0 < n) {
+        (void) send(client_fd, buffer, n, 0);
+      } else {
+        break;
+      }
+    }
+    println("Closing connection\n");
     (void) close(client_fd);
   }
 
