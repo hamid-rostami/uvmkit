@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -18,7 +19,7 @@ int32_t uvmkit_event_handler(uvm32_state_t *vmst, uvm32_evt_t *evt) {
     break;
   }
   case UVM32_SYSCALL_PUTC: {
-    printf("APP: %c", uvm32_arg_getval(vmst, evt, ARG0));
+    printf("APP: %c", (char)uvm32_arg_getval(vmst, evt, ARG0));
     break;
   }
   case UVM32_SYSCALL_PRINTLN: {
@@ -40,8 +41,6 @@ int32_t uvmkit_event_handler(uvm32_state_t *vmst, uvm32_evt_t *evt) {
     int protocol = (int)uvmkit_decode_u32(&s->protocol);
 
     int server_fd = socket(domain, type, protocol);
-    printf("<< SOCKET syscall %d, %d, %d >> %d\n", domain, type, protocol,
-           server_fd);
     uvm32_arg_setval(vmst, evt, RET, (uint32_t)server_fd);
     break;
   }
@@ -61,8 +60,6 @@ int32_t uvmkit_event_handler(uvm32_state_t *vmst, uvm32_evt_t *evt) {
     addr.sin_addr.s_addr = (int)uvmkit_decode_u32(&data->address);
 
     int ret = bind(sockfd, (const struct sockaddr *)&addr, sizeof(addr));
-    printf("<< BIND syscall fd:%d, port:%d, fam: %d>> %d\n", sockfd,
-           addr.sin_port, addr.sin_family, ret);
     uvm32_arg_setval(vmst, evt, RET, (uint32_t)ret);
     break;
   }
@@ -80,7 +77,6 @@ int32_t uvmkit_event_handler(uvm32_state_t *vmst, uvm32_evt_t *evt) {
     int backlog = (int)uvmkit_decode_u32(&data->backlog);
 
     int ret = listen(sockfd, backlog);
-    printf("<< LISTEN syscall fd:%d, backlog=%d >> %d\n", sockfd, backlog, ret);
     uvm32_arg_setval(vmst, evt, RET, (uint32_t)ret);
     break;
   }
@@ -99,7 +95,6 @@ int32_t uvmkit_event_handler(uvm32_state_t *vmst, uvm32_evt_t *evt) {
     struct sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
 
-    printf("<< ACCEPT syscall %d\n", sockfd);
     int client_fd = accept(sockfd, (struct sockaddr *)&addr, &addr_len);
 
     uvmkit_encode_u32(&data->from_host.family, addr.sin_family);
@@ -132,9 +127,7 @@ int32_t uvmkit_event_handler(uvm32_state_t *vmst, uvm32_evt_t *evt) {
       break;
     }
 
-    printf("Recv len: %ld\n", len);
     ssize_t n = recv(sockfd, buf2.ptr, len, flags);
-    printf("Recvd %ld bytes\n", n);
     uvm32_arg_setval(vmst, evt, RET, (uint32_t)n);
     break;
   }
@@ -183,7 +176,7 @@ int32_t uvmkit_event_handler(uvm32_state_t *vmst, uvm32_evt_t *evt) {
   }
 
   default:
-    printf("Unhandled syscall 0x%08x\n", evt->data.syscall.code);
+    printf("Unhandled syscall 0x%08"PRIx32"\n", evt->data.syscall.code);
     ret = -1;
     break;
   }
