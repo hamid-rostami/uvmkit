@@ -1,3 +1,27 @@
+if(ESP_PLATFORM)
+idf_component_register(
+    SRCS
+        "src/events.c"
+        "src/utils.c"
+        "uvm32/uvm32/uvm32.c"
+    INCLUDE_DIRS
+        "inc"
+        "uvm32/uvm32"
+        "uvm32/common"
+        "uvm32/hosts/host-gdbstub"
+    REQUIRES
+        lwip
+)
+
+target_compile_definitions(${COMPONENT_LIB} PUBLIC
+    UVM32_MEMORY_SIZE=1048576
+    UVM32_ERROR_STRINGS
+    GDBSTUB_ARCH_UVM32
+    GDBSTUB_IMPLEMENTATION
+)
+
+else()
+
 cmake_minimum_required(VERSION 4.2.3)
 
 project(uvmkit-project
@@ -24,7 +48,4 @@ add_library(uvmkit STATIC "./src/events.c" "./src/utils.c")
 target_include_directories(uvmkit PUBLIC "./inc")
 target_link_libraries(uvmkit uvm32 gdbstub)
 
-
-# if(ESP_PLATFORM)
-# else()
-# endif()
+endif()
