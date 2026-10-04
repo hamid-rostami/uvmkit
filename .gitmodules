@@ -1,3 +1,6 @@
 [submodule "uvm32"]
 	path = uvm32
 	url = git@github.com:hamid-rostami/uvm32.git
+[submodule "app/webserver/picohttpparser"]
+	path = app/webserver/picohttpparser
+	url = git@github.com:h2o/picohttpparser.git
