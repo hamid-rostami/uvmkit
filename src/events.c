@@ -19,7 +19,7 @@ int32_t uvmkit_event_handler(uvm32_state_t *vmst, uvm32_evt_t *evt) {
     break;
   }
   case UVM32_SYSCALL_PUTC: {
-    printf("APP: %c", (char)uvm32_arg_getval(vmst, evt, ARG0));
+    printf("%c", (char)uvm32_arg_getval(vmst, evt, ARG0));
     break;
   }
   case UVM32_SYSCALL_PRINTLN: {
