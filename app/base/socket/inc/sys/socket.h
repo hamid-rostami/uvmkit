@@ -38,7 +38,7 @@ struct sockaddr_in {
 
 
 struct sockaddr {
-  uint8_t _[];
+  uint8_t _[1];
 };
 
 
