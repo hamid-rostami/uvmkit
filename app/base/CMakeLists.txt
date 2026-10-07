@@ -19,7 +19,7 @@ target_compile_options(
     -fno-stack-protector
     -g3
     -Os
-    --specs=nano.specs
+    --specs=${GCC_SPECS}
 )
 
 target_link_options(
@@ -29,7 +29,7 @@ target_link_options(
     -mabi=ilp32
     -T${CMAKE_CURRENT_SOURCE_DIR}/linker.ld
     -nostartfiles
-    --specs=nano.specs
+    --specs=${GCC_SPECS}
     -Wl,--gc-sections
 )
 
