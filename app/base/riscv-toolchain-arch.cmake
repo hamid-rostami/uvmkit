@@ -2,9 +2,8 @@
 # cmake -DCMAKE_TOOLCHAIN_FILE=riscv-toolchain.cmake ..
 
 set(CMAKE_SYSTEM_NAME Generic)
-set(TOOLCHAIN_PREFIX riscv64-unknown-elf-)
+set(TOOLCHAIN_PREFIX riscv64-elf-)
 set(GCC_SPECS nano.specs)
-#set(GCC_SPECS picolibc.specs)
 
 set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}gcc)
 set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PREFIX}g++)
