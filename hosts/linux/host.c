@@ -2,7 +2,10 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+
+#include <raylib.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -10,8 +13,150 @@
 #include <unistd.h>
 
 #include "gdbstub.h"
+#include "uvmkit/common/uvmkit_display_wire.h"
+#include "uvmkit/common/uvmkit_sys.h"
+#include "uvmkit/common/uvmkit_wire.h"
 #include "uvmkit/events.h"
 #include "uvmkit/utils.h"
+
+#define LCD_WIDTH 240
+#define LCD_HEIGHT 135
+#define LCD_SCALE 4
+
+static Texture2D display_texture;
+static Color *display_pixels;
+
+static Color rgb565_to_color(uint16_t pixel) {
+  return (Color){
+      .r = (uint8_t)((((pixel >> 11) & 0x1f) * 255 + 15) / 31),
+      .g = (uint8_t)((((pixel >> 5) & 0x3f) * 255 + 31) / 63),
+      .b = (uint8_t)(((pixel & 0x1f) * 255 + 15) / 31),
+      .a = 255,
+  };
+}
+
+static void display_draw(void) {
+  BeginDrawing();
+  ClearBackground(BLACK);
+  DrawTextureEx(display_texture, (Vector2){0, 0}, 0.0f, LCD_SCALE, WHITE);
+  EndDrawing();
+}
+
+static bool display_init(void) {
+  InitWindow(LCD_WIDTH * LCD_SCALE, LCD_HEIGHT * LCD_SCALE, "UVMKit LCD");
+  if (!IsWindowReady()) {
+    fprintf(stderr, "raylib window initialization failed\n");
+    return false;
+  }
+
+  SetTargetFPS(60);
+  display_pixels = calloc(LCD_WIDTH * LCD_HEIGHT, sizeof(*display_pixels));
+  if (NULL == display_pixels) {
+    fprintf(stderr, "failed to allocate LCD framebuffer\n");
+    CloseWindow();
+    return false;
+  }
+  /* RGB565 color bars provide a visible startup frame until the VM renders. */
+  static const uint16_t sample_colors[] = {
+      0xf800, 0xffe0, 0x07e0, 0x07ff, 0x001f, 0xf81f, 0xffff, 0x0000,
+  };
+  for (int y = 0; y < LCD_HEIGHT; ++y) {
+    for (int x = 0; x < LCD_WIDTH; ++x) {
+      size_t bar = (size_t)x * (sizeof(sample_colors) / sizeof(sample_colors[0])) /
+                   LCD_WIDTH;
+      display_pixels[y * LCD_WIDTH + x] = rgb565_to_color(sample_colors[bar]);
+    }
+  }
+
+  Image image = {
+      .data = display_pixels,
+      .width = LCD_WIDTH,
+      .height = LCD_HEIGHT,
+      .mipmaps = 1,
+      .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
+  };
+  display_texture = LoadTextureFromImage(image);
+  if (display_texture.id == 0) {
+    fprintf(stderr, "raylib texture initialization failed\n");
+    free(display_pixels);
+    display_pixels = NULL;
+    CloseWindow();
+    return false;
+  }
+  SetTextureFilter(display_texture, TEXTURE_FILTER_POINT);
+  display_draw();
+  return true;
+}
+
+static bool display_frame(uvm32_state_t *vmst, uvm32_evt_t *evt) {
+  /* Coordinates are signed values encoded in the shared u32 wire format. */
+  uvm32_slice_t area =
+      uvm32_arg_getslice_fixed(vmst, evt, ARG0,
+                               sizeof(struct uvmkit_display_area_s));
+  if (area.len != sizeof(struct uvmkit_display_area_s)) {
+    uvm32_arg_setval(vmst, evt, RET, (uint32_t)-1);
+    return false;
+  }
+
+  struct uvmkit_display_area_s* data = (struct uvmkit_display_area_s*) area.ptr;
+  int32_t x1 = (int32_t)uvmkit_decode_u32(&data->x1);
+  int32_t y1 = (int32_t)uvmkit_decode_u32(&data->y1);
+  int32_t x2 = (int32_t)uvmkit_decode_u32(&data->x2);
+  int32_t y2 = (int32_t)uvmkit_decode_u32(&data->y2);
+  if (x1 < 0 || y1 < 0 || x2 < x1 || y2 < y1 || x2 >= LCD_WIDTH ||
+      y2 >= LCD_HEIGHT) {
+    fprintf(stderr, "render syscall: invalid area (%d, %d)-(%d, %d)\n", x1,
+            y1, x2, y2);
+    uvm32_arg_setval(vmst, evt, RET, (uint32_t)-1);
+    return false;
+  }
+
+  int32_t width = x2 - x1 + 1;
+  int32_t height = y2 - y1 + 1;
+  size_t pixel_count = (size_t)width * (size_t)height;
+  uvm32_slice_t pixels =
+      uvm32_arg_getslice_fixed(vmst, evt, ARG1,
+                               (uint32_t)(pixel_count * sizeof(uint16_t)));
+  if (pixels.len != pixel_count * sizeof(uint16_t)) {
+    fprintf(stderr, "render syscall: invalid RGB565 pixel map size\n");
+    uvm32_arg_setval(vmst, evt, RET, (uint32_t)-2);
+    return false;
+  }
+
+  if (WindowShouldClose()) {
+    uvm32_arg_setval(vmst, evt, RET, (uint32_t)-3);
+    return false;
+  }
+
+  const uint8_t *src = pixels.ptr;
+  for (size_t i = 0; i < pixel_count; ++i) {
+    uint16_t rgb565 = (uint16_t)src[2 * i] | ((uint16_t)src[2 * i + 1] << 8);
+    display_pixels[i] = rgb565_to_color(rgb565);
+  }
+  UpdateTextureRec(display_texture,
+                   (Rectangle){(float)x1, (float)y1, (float)width,
+                               (float)height},
+                   display_pixels);
+  display_draw();
+  uvm32_arg_setval(vmst, evt, RET, 0);
+  return true;
+}
+
+static void display_destroy(void) {
+  if (display_texture.id != 0) {
+    UnloadTexture(display_texture);
+  }
+  free(display_pixels);
+  if (IsWindowReady()) {
+    CloseWindow();
+  }
+}
+
+static void display_wait_until_closed(void) {
+  while (!WindowShouldClose()) {
+    display_draw();
+  }
+}
 
 const char *usage = "Usage: %s [-d] [file...]\n";
 #define PORT 1234
@@ -106,7 +251,11 @@ static void run(uvm32_state_t *vmst) {
       break;
 
     case UVM32_EVT_SYSCALL: // vm has paused to handle UVM32_SYSCALL
-      (void)uvmkit_event_handler(vmst, &evt);
+      if (evt.data.syscall.code == UVM32_SYSCALL_RENDER) {
+        (void)display_frame(vmst, &evt);
+      } else {
+        (void)uvmkit_event_handler(vmst, &evt);
+      }
       break;
     } // switch
   } // while
@@ -136,12 +285,20 @@ int main(int argc, char *argv[]) {
   uvm32_state_t *vmst = uvm32_init_from_file(argv[optind], &err);
   assert((NULL != vmst) && (0 == err)); // FIXME
 
+  if (!display_init()) {
+    free(vmst);
+    return EXIT_FAILURE;
+  }
+
   if (debug) {
     run_gdbstub(vmst);
   } else {
     run(vmst);
   }
 
+  display_wait_until_closed();
+
   free(vmst);
+  display_destroy();
   return 0;
 }

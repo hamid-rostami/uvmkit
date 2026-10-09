@@ -4,3 +4,6 @@
 [submodule "app/webserver/picohttpparser"]
 	path = app/webserver/picohttpparser
 	url = git@github.com:h2o/picohttpparser.git
+[submodule "app/lvgl/lvgl"]
+	path = app/lvgl/lvgl
+	url = git@github.com:lvgl/lvgl.git

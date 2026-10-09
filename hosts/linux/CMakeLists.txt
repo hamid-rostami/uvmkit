@@ -5,6 +5,8 @@ project(linux-uvmkit-host
         DESCRIPTION "Linux UVMKIT host"
         LANGUAGES C ASM)
 
+find_package(raylib CONFIG REQUIRED)
+
 add_subdirectory("../../" uvmkit)
 add_executable(host host.c)
-target_link_libraries(host uvmkit)
+target_link_libraries(host uvmkit raylib)
