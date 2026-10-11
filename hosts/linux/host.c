@@ -21,7 +21,7 @@
 
 #define LCD_WIDTH 240
 #define LCD_HEIGHT 135
-#define LCD_SCALE 4
+#define LCD_SCALE 1
 
 static Texture2D display_texture;
 static Color *display_pixels;
@@ -252,6 +252,7 @@ static void run(uvm32_state_t *vmst) {
   bool running = true;
 
   while (running) {
+    usleep(1);
     uint32_t ran_steps = uvm32_run(vmst, &evt, STEPS);
 
     switch (evt.typ) {
