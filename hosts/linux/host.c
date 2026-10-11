@@ -142,6 +142,31 @@ static bool display_frame(uvm32_state_t *vmst, uvm32_evt_t *evt) {
   return true;
 }
 
+static void get_mouse(uvm32_state_t *vmst, uvm32_evt_t *evt) {
+  /* Coordinates are signed values encoded in the shared u32 wire format. */
+  uvm32_slice_t buf =
+      uvm32_arg_getslice_fixed(vmst, evt, ARG0,
+                               sizeof(struct uvmkit_touchpad_s));
+  if (buf.len != sizeof(struct uvmkit_touchpad_s)) {
+    uvm32_arg_setval(vmst, evt, RET, (uint32_t)-1);
+    return;
+  }
+
+  struct uvmkit_touchpad_s* data = (struct uvmkit_touchpad_s*) buf.ptr;
+
+  if (WindowShouldClose()) {
+    uvm32_arg_setval(vmst, evt, RET, (uint32_t)-3);
+    return;
+  }
+
+  display_draw();
+  Vector2 ballPosition = GetMousePosition();
+  data->x = (uint32_t)ballPosition.x;
+  data->y = (uint32_t)ballPosition.y;
+  data->state = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+  uvm32_arg_setval(vmst, evt, RET, (uint32_t)0);
+}
+
 static void display_destroy(void) {
   if (display_texture.id != 0) {
     UnloadTexture(display_texture);
@@ -251,10 +276,18 @@ static void run(uvm32_state_t *vmst) {
       break;
 
     case UVM32_EVT_SYSCALL: // vm has paused to handle UVM32_SYSCALL
-      if (evt.data.syscall.code == UVM32_SYSCALL_RENDER) {
+      switch(evt.data.syscall.code) {
+      case UVM32_SYSCALL_RENDER:
         (void)display_frame(vmst, &evt);
-      } else {
+        break;
+
+      case UVM32_SYSCALL_TOUCHPAD:
+        (void)get_mouse(vmst, &evt);
+        break;
+
+      default:
         (void)uvmkit_event_handler(vmst, &evt);
+        break;
       }
       break;
     } // switch

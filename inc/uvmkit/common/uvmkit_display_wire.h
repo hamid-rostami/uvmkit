@@ -9,3 +9,9 @@ struct uvmkit_display_area_s {
   uint32_t x2;
   uint32_t y2;
 };
+
+struct uvmkit_touchpad_s {
+  uint32_t x;
+  uint32_t y;
+  uint32_t state;
+};
