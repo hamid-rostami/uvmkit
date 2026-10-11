@@ -43,3 +43,7 @@ int _isatty(int file) {
   errno = EBADF;
   return 0;
 }
+
+int usleep(useconds_t useconds) {
+  return syscall_cast(UVM32_SYSCALL_USLEEP, useconds, 0);
+}

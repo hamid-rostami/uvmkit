@@ -15,6 +15,11 @@ int32_t uvmkit_event_handler(uvm32_state_t *vmst, uvm32_evt_t *evt) {
   int32_t ret = 0;
 
   switch (evt->data.syscall.code) {
+  case UVM32_SYSCALL_USLEEP:
+    uint32_t val = (uint32_t)uvm32_arg_getval(vmst, evt, ARG0);
+    usleep(val);
+    break;
+
   case UVM32_SYSCALL_YIELD: {
     break;
   }
