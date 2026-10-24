@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>UVMKit Display</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #111;
+            color: #eee;
+            margin: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        canvas {
+            border: 2px solid #444;
+            image-rendering: pixelated;
+            width: 480px;
+            height: 270px;
+        }
+        #status {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <h2>UVMKit Display</h2>
+    <canvas id="screen" width="240" height="135"></canvas>
+    <div id="status">Connecting...</div>
+
+    <script>
+        const canvas = document.getElementById("screen");
+        const ctx = canvas.getContext("2d");
+        const status = document.getElementById("status");
+
+        const ws = new WebSocket("ws://" + location.host + "/ws", "ws-echo");
+        ws.binaryType = "arraybuffer";
+
+        ws.onopen = () => status.textContent = "Connected";
+        ws.onclose = () => status.textContent = "Disconnected";
+        ws.onerror = () => status.textContent = "WebSocket Error";
+
+        ws.onmessage = (event) => {
+            if (!(event.data instanceof ArrayBuffer)) return;
+
+            const view = new DataView(event.data);
+            if (view.byteLength < 16) return;
+
+            // Header: struct ws_wire_msg_s (tag: uint32, len: uint32)
+            const tag = view.getUint32(0, true);
+            const len = view.getUint32(4, true);
+
+            if (tag === 1) { // WS_TAG_FRAME
+                // struct ws_wire_data_frame_s (x, y, w, h: uint16 each)
+                const x = view.getUint16(8, true);
+                const y = view.getUint16(10, true);
+                const w = view.getUint16(12, true);
+                const h = view.getUint16(14, true);
+
+                if (w === 0 || h === 0) return;
+
+                // Pixels start at byte offset 16 (8 bytes msg header + 8 bytes frame header)
+                const pixels = new Uint8ClampedArray(event.data, 16, w * h * 4);
+                const imgData = new ImageData(pixels, w, h);
+
+                ctx.putImageData(imgData, x, y);
+            }
+        };
+    </script>
+</body>
+</html>

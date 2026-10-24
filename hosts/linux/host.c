@@ -5,8 +5,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <raylib.h>
-
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -19,76 +17,22 @@
 #include "uvmkit/events.h"
 #include "uvmkit/utils.h"
 
+#include "ws.h"
+
 #define LCD_WIDTH 240
 #define LCD_HEIGHT 135
 #define LCD_SCALE 1
 
-static Texture2D display_texture;
-static Color *display_pixels;
-
-static Color rgb565_to_color(uint16_t pixel) {
-  return (Color){
-      .r = (uint8_t)((((pixel >> 11) & 0x1f) * 255 + 15) / 31),
-      .g = (uint8_t)((((pixel >> 5) & 0x3f) * 255 + 31) / 63),
-      .b = (uint8_t)(((pixel & 0x1f) * 255 + 15) / 31),
-      .a = 255,
-  };
-}
-
-static void display_draw(void) {
-  BeginDrawing();
-  ClearBackground(BLACK);
-  DrawTextureEx(display_texture, (Vector2){0, 0}, 0.0f, LCD_SCALE, WHITE);
-  EndDrawing();
-}
-
-static bool display_init(void) {
-  InitWindow(LCD_WIDTH * LCD_SCALE, LCD_HEIGHT * LCD_SCALE, "UVMKit LCD");
-  if (!IsWindowReady()) {
-    fprintf(stderr, "raylib window initialization failed\n");
-    return false;
-  }
-
-  SetTargetFPS(60);
-  display_pixels = calloc(LCD_WIDTH * LCD_HEIGHT, sizeof(*display_pixels));
-  if (NULL == display_pixels) {
-    fprintf(stderr, "failed to allocate LCD framebuffer\n");
-    CloseWindow();
-    return false;
-  }
-  /* RGB565 color bars provide a visible startup frame until the VM renders. */
-  static const uint16_t sample_colors[] = {
-      0xf800, 0xffe0, 0x07e0, 0x07ff, 0x001f, 0xf81f, 0xffff, 0x0000,
-  };
-  for (int y = 0; y < LCD_HEIGHT; ++y) {
-    for (int x = 0; x < LCD_WIDTH; ++x) {
-      size_t bar = (size_t)x * (sizeof(sample_colors) / sizeof(sample_colors[0])) /
-                   LCD_WIDTH;
-      display_pixels[y * LCD_WIDTH + x] = rgb565_to_color(sample_colors[bar]);
-    }
-  }
-
-  Image image = {
-      .data = display_pixels,
-      .width = LCD_WIDTH,
-      .height = LCD_HEIGHT,
-      .mipmaps = 1,
-      .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
-  };
-  display_texture = LoadTextureFromImage(image);
-  if (display_texture.id == 0) {
-    fprintf(stderr, "raylib texture initialization failed\n");
-    free(display_pixels);
-    display_pixels = NULL;
-    CloseWindow();
-    return false;
-  }
-  SetTextureFilter(display_texture, TEXTURE_FILTER_POINT);
-  display_draw();
-  return true;
-}
+static uintptr_t ws_handle;
+const char *usage = "Usage: %s [-d] [file...]\n";
+#define PORT 1234
 
 static bool display_frame(uvm32_state_t *vmst, uvm32_evt_t *evt) {
+  if (0 == ws_handle) {
+    uvm32_arg_setval(vmst, evt, RET, (uint32_t)-1);
+    return false;
+  }
+
   /* Coordinates are signed values encoded in the shared u32 wire format. */
   uvm32_slice_t area =
       uvm32_arg_getslice_fixed(vmst, evt, ARG0,
@@ -123,68 +67,56 @@ static bool display_frame(uvm32_state_t *vmst, uvm32_evt_t *evt) {
     return false;
   }
 
-  if (WindowShouldClose()) {
-    uvm32_arg_setval(vmst, evt, RET, (uint32_t)-3);
-    return false;
-  }
-
-  const uint8_t *src = pixels.ptr;
-  for (size_t i = 0; i < pixel_count; ++i) {
-    uint16_t rgb565 = (uint16_t)src[2 * i] | ((uint16_t)src[2 * i + 1] << 8);
-    display_pixels[i] = rgb565_to_color(rgb565);
-  }
-  UpdateTextureRec(display_texture,
-                   (Rectangle){(float)x1, (float)y1, (float)width,
-                               (float)height},
-                   display_pixels);
-  display_draw();
+  printf("displaying frame...\n");
+  (void) ws_display_update_rec(ws_handle,
+                               x1, y1,
+                               width, height,
+                               pixels.ptr, pixel_count);
   uvm32_arg_setval(vmst, evt, RET, 0);
   return true;
 }
 
 static void get_mouse(uvm32_state_t *vmst, uvm32_evt_t *evt) {
-  /* Coordinates are signed values encoded in the shared u32 wire format. */
-  uvm32_slice_t buf =
-      uvm32_arg_getslice_fixed(vmst, evt, ARG0,
-                               sizeof(struct uvmkit_touchpad_s));
-  if (buf.len != sizeof(struct uvmkit_touchpad_s)) {
-    uvm32_arg_setval(vmst, evt, RET, (uint32_t)-1);
-    return;
-  }
+  /* /\* Coordinates are signed values encoded in the shared u32 wire format. *\/ */
+  /* uvm32_slice_t buf = */
+  /*     uvm32_arg_getslice_fixed(vmst, evt, ARG0, */
+  /*                              sizeof(struct uvmkit_touchpad_s)); */
+  /* if (buf.len != sizeof(struct uvmkit_touchpad_s)) { */
+  /*   uvm32_arg_setval(vmst, evt, RET, (uint32_t)-1); */
+  /*   return; */
+  /* } */
 
-  struct uvmkit_touchpad_s* data = (struct uvmkit_touchpad_s*) buf.ptr;
+  /* struct uvmkit_touchpad_s* data = (struct uvmkit_touchpad_s*) buf.ptr; */
 
-  if (WindowShouldClose()) {
-    uvm32_arg_setval(vmst, evt, RET, (uint32_t)-3);
-    return;
-  }
+  /* if (WindowShouldClose()) { */
+  /*   uvm32_arg_setval(vmst, evt, RET, (uint32_t)-3); */
+  /*   return; */
+  /* } */
 
-  display_draw();
-  Vector2 ballPosition = GetMousePosition();
-  data->x = (uint32_t)ballPosition.x;
-  data->y = (uint32_t)ballPosition.y;
-  data->state = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
-  uvm32_arg_setval(vmst, evt, RET, (uint32_t)0);
+  /* display_draw(); */
+  /* Vector2 ballPosition = GetMousePosition(); */
+  /* data->x = (uint32_t)ballPosition.x; */
+  /* data->y = (uint32_t)ballPosition.y; */
+  /* data->state = IsMouseButtonPressed(MOUSE_BUTTON_LEFT); */
+  /* uvm32_arg_setval(vmst, evt, RET, (uint32_t)0); */
 }
 
-static void display_destroy(void) {
-  if (display_texture.id != 0) {
-    UnloadTexture(display_texture);
-  }
-  free(display_pixels);
-  if (IsWindowReady()) {
-    CloseWindow();
-  }
-}
+/* static void display_destroy(void) { */
+/*   if (display_texture.id != 0) { */
+/*     UnloadTexture(display_texture); */
+/*   } */
+/*   free(display_pixels); */
+/*   if (IsWindowReady()) { */
+/*     CloseWindow(); */
+/*   } */
+/* } */
 
-static void display_wait_until_closed(void) {
-  while (!WindowShouldClose()) {
-    display_draw();
-  }
-}
+/* static void display_wait_until_closed(void) { */
+/*   while (!WindowShouldClose()) { */
+/*     display_draw(); */
+/*   } */
+/* } */
 
-const char *usage = "Usage: %s [-d] [file...]\n";
-#define PORT 1234
 
 static void run_gdbstub(uvm32_state_t *vmst) {
   int server_sock;
@@ -247,13 +179,13 @@ static void run_gdbstub(uvm32_state_t *vmst) {
 }
 
 static void run(uvm32_state_t *vmst) {
-  enum { STEPS = 1000 };
+  enum { STEPS = 10000 };
   uvm32_evt_t evt;
   bool running = true;
 
   while (running) {
-    usleep(1);
     uint32_t ran_steps = uvm32_run(vmst, &evt, STEPS);
+    ws_service(ws_handle);
 
     switch (evt.typ) {
     default:
@@ -297,12 +229,18 @@ static void run(uvm32_state_t *vmst) {
 
 int main(int argc, char *argv[]) {
   bool debug = false;
-
+  uint16_t port = 9000;
+  //(void) ws_server_init(9000);
+  
+    
   int opt;
-  while ((opt = getopt(argc, argv, "d")) != -1) {
+  while ((opt = getopt(argc, argv, "d:p:")) != -1) {
     switch (opt) {
     case 'd':
       debug = true;
+      break;
+    case 'p':
+      port = atoi(optarg);
       break;
     default:
       fprintf(stderr, usage, argv[0]);
@@ -315,14 +253,14 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
+  ws_handle = ws_server_init(port, LCD_WIDTH, LCD_HEIGHT);
+  if (0 == ws_handle) {
+    printf("Failed to create websocket server\n");
+  }
+
   int32_t err = 0;
   uvm32_state_t *vmst = uvm32_init_from_file(argv[optind], &err);
   assert((NULL != vmst) && (0 == err)); // FIXME
-
-  if (!display_init()) {
-    free(vmst);
-    return EXIT_FAILURE;
-  }
 
   if (debug) {
     run_gdbstub(vmst);
@@ -330,9 +268,6 @@ int main(int argc, char *argv[]) {
     run(vmst);
   }
 
-  display_wait_until_closed();
-
   free(vmst);
-  display_destroy();
   return 0;
 }

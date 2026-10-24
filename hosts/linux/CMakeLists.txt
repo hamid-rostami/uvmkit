@@ -6,7 +6,9 @@ project(linux-uvmkit-host
         LANGUAGES C ASM)
 
 find_package(raylib CONFIG REQUIRED)
+find_package(libwebsockets CONFIG REQUIRED)
 
 add_subdirectory("../../" uvmkit)
-add_executable(host host.c)
-target_link_libraries(host uvmkit raylib)
+add_executable(host host.c ws.c)
+target_link_libraries(host uvmkit websockets)
+
