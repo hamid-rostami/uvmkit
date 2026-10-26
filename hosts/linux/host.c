@@ -77,28 +77,30 @@ static bool display_frame(uvm32_state_t *vmst, uvm32_evt_t *evt) {
 }
 
 static void get_mouse(uvm32_state_t *vmst, uvm32_evt_t *evt) {
-  /* /\* Coordinates are signed values encoded in the shared u32 wire format. *\/ */
-  /* uvm32_slice_t buf = */
-  /*     uvm32_arg_getslice_fixed(vmst, evt, ARG0, */
-  /*                              sizeof(struct uvmkit_touchpad_s)); */
-  /* if (buf.len != sizeof(struct uvmkit_touchpad_s)) { */
-  /*   uvm32_arg_setval(vmst, evt, RET, (uint32_t)-1); */
-  /*   return; */
-  /* } */
+  /* Coordinates are signed values encoded in the shared u32 wire format. */
+  uvm32_slice_t buf =
+      uvm32_arg_getslice_fixed(vmst, evt, ARG0,
+                               sizeof(struct uvmkit_touchpad_s));
+  if (buf.len != sizeof(struct uvmkit_touchpad_s)) {
+    uvm32_arg_setval(vmst, evt, RET, (uint32_t)-1);
+    return;
+  }
 
-  /* struct uvmkit_touchpad_s* data = (struct uvmkit_touchpad_s*) buf.ptr; */
+  struct uvmkit_touchpad_s* data = (struct uvmkit_touchpad_s*) buf.ptr;
 
-  /* if (WindowShouldClose()) { */
-  /*   uvm32_arg_setval(vmst, evt, RET, (uint32_t)-3); */
-  /*   return; */
-  /* } */
-
-  /* display_draw(); */
   /* Vector2 ballPosition = GetMousePosition(); */
   /* data->x = (uint32_t)ballPosition.x; */
   /* data->y = (uint32_t)ballPosition.y; */
   /* data->state = IsMouseButtonPressed(MOUSE_BUTTON_LEFT); */
-  /* uvm32_arg_setval(vmst, evt, RET, (uint32_t)0); */
+  struct ws_wire_data_mouse_s mouse;
+  if (0 != ws_get_mouse(ws_handle, &mouse)) {
+    uvm32_arg_setval(vmst, evt, RET, (uint32_t)-2);
+    return;
+  }
+  data->x = mouse.x;
+  data->y = mouse.y;
+  data->state = (mouse.btn == 1);
+  uvm32_arg_setval(vmst, evt, RET, (uint32_t)0);
 }
 
 /* static void display_destroy(void) { */
@@ -212,6 +214,7 @@ static void run(uvm32_state_t *vmst) {
       switch(evt.data.syscall.code) {
       case UVM32_SYSCALL_RENDER:
         (void)display_frame(vmst, &evt);
+        ws_service(ws_handle);
         break;
 
       case UVM32_SYSCALL_TOUCHPAD:

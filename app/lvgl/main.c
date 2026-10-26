@@ -100,11 +100,25 @@ int main(void) {
   lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(indev, my_touch_read_cb);
 
+  /*Create a cursor for the pointer input device*/
+  const int32_t cursor_size = 9;
+  lv_obj_t * cursor_obj = lv_obj_create(lv_screen_active());
+  lv_obj_remove_style_all(cursor_obj);
+  lv_obj_set_size(cursor_obj, cursor_size, cursor_size);
+  lv_obj_set_style_translate_x(cursor_obj, -cursor_size / 2, 0);
+  lv_obj_set_style_translate_y(cursor_obj, -cursor_size / 2, 0);
+  lv_obj_set_style_radius(cursor_obj, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_opa(cursor_obj, LV_OPA_70, 0);
+  lv_obj_set_style_bg_color(cursor_obj, lv_color_black(), 0);
+  lv_obj_set_style_border_width(cursor_obj, 1, 0);
+  lv_obj_set_style_border_color(cursor_obj, lv_color_white(), 0);
+  lv_indev_set_cursor(indev, cursor_obj);
+
   while(1) {
   //for(uint8_t i = 0; i < 5; ++i) {
     lv_timer_handler();
-    usleep(100000);
-    lv_tick_inc(100);
+    usleep(5000);
+    lv_tick_inc(5);
   }
   println("hi\n");
 

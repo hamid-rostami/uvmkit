@@ -27,48 +27,94 @@
     </style>
 </head>
 <body>
-    <h2>UVMKit Display</h2>
-    <canvas id="screen" width="240" height="135"></canvas>
-    <div id="status">Connecting...</div>
+  <h2>UVMKit Display</h2>
+  <canvas id="screen" width="240" height="135"></canvas>
+  <div id="status">Connecting...</div>
 
-    <script>
-        const canvas = document.getElementById("screen");
-        const ctx = canvas.getContext("2d");
-        const status = document.getElementById("status");
+  <script>
+    const canvas = document.getElementById("screen");
+    const ctx = canvas.getContext("2d");
+    const status = document.getElementById("status");
 
-        const ws = new WebSocket("ws://" + location.host + "/ws", "ws-echo");
-        ws.binaryType = "arraybuffer";
+    const ws = new WebSocket("ws://" + location.host + "/ws", "ws-echo");
+    let isConnected = false;
+    ws.binaryType = "arraybuffer";
 
-        ws.onopen = () => status.textContent = "Connected";
-        ws.onclose = () => status.textContent = "Disconnected";
-        ws.onerror = () => status.textContent = "WebSocket Error";
+    ws.onopen = () => status.textContent = "Connected";
+    ws.onclose = () => status.textContent = "Disconnected";
+    ws.onerror = () => status.textContent = "WebSocket Error";
 
-        ws.onmessage = (event) => {
-            if (!(event.data instanceof ArrayBuffer)) return;
+    // Helper function to send mouse/pointer events to server
+    function sendMouseEvent(event) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
 
-            const view = new DataView(event.data);
-            if (view.byteLength < 16) return;
+        const x = Math.max(0, Math.min(canvas.width - 1, Math.floor((event.clientX - rect.left) * scaleX)));
+        const y = Math.max(0, Math.min(canvas.height - 1, Math.floor((event.clientY - rect.top) * scaleY)));
+        const btn = (event.buttons & 1); // 1 = left button pressed, 0 = released
 
-            // Header: struct ws_wire_msg_s (tag: uint32, len: uint32)
-            const tag = view.getUint32(0, true);
-            const len = view.getUint32(4, true);
+        const buffer = new ArrayBuffer(16);
+        const view = new DataView(buffer);
+        view.setUint32(0, 2, true); // WS_TAG_MOUSE
+        view.setUint32(4, 8, true); // sizeof(ws_wire_data_mouse_s)
+        view.setUint16(8, x, true);
+        view.setUint16(10, y, true);
+        view.setUint8(12, btn, true);
+        view.setUint8(13, 0, true);
+        view.setUint8(14, 0, true);
+        view.setUint8(15, 0, true);
 
-            if (tag === 1) { // WS_TAG_FRAME
-                // struct ws_wire_data_frame_s (x, y, w, h: uint16 each)
-                const x = view.getUint16(8, true);
-                const y = view.getUint16(10, true);
-                const w = view.getUint16(12, true);
-                const h = view.getUint16(14, true);
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(buffer);
+        }
+    }
 
-                if (w === 0 || h === 0) return;
+    // Track mouse events: movement, down, up, and leave
+    canvas.addEventListener('mousemove', sendMouseEvent);
+    canvas.addEventListener('mousedown', sendMouseEvent);
+    canvas.addEventListener('mouseup', sendMouseEvent);
+    canvas.addEventListener('mouseleave', (event) => {
+        // Send button release when mouse leaves canvas
+        sendMouseEvent({ clientX: event.clientX, clientY: event.clientY, buttons: 0 });
+    });
 
-                // Pixels start at byte offset 16 (8 bytes msg header + 8 bytes frame header)
-                const pixels = new Uint8ClampedArray(event.data, 16, w * h * 4);
-                const imgData = new ImageData(pixels, w, h);
+    ws.addEventListener('open', (event) => {
+        console.log("WebSocket connection established.");
+        isConnected = true;
+    });
 
-                ctx.putImageData(imgData, x, y);
-            }
-        };
-    </script>
+    ws.addEventListener('close', (event) => {
+        console.log("WebSocket connection closed.");
+        isConnected = false;
+    });
+
+    ws.onmessage = (event) => {
+        if (!(event.data instanceof ArrayBuffer)) return;
+
+        const view = new DataView(event.data);
+        if (view.byteLength < 16) return;
+
+        // Header: struct ws_wire_msg_s (tag: uint32, len: uint32)
+        const tag = view.getUint32(0, true);
+        const len = view.getUint32(4, true);
+
+        if (tag === 1) { // WS_TAG_FRAME
+            // struct ws_wire_data_frame_s (x, y, w, h: uint16 each)
+            const x = view.getUint16(8, true);
+            const y = view.getUint16(10, true);
+            const w = view.getUint16(12, true);
+            const h = view.getUint16(14, true);
+
+            if (w === 0 || h === 0) return;
+
+            // Pixels start at byte offset 16 (8 bytes msg header + 8 bytes frame header)
+            const pixels = new Uint8ClampedArray(event.data, 16, w * h * 4);
+            const imgData = new ImageData(pixels, w, h);
+
+            ctx.putImageData(imgData, x, y);
+        }
+    };
+  </script>
 </body>
 </html>

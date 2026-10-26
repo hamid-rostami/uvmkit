@@ -22,7 +22,7 @@ static const struct lws_protocols protocols[] = {
     .name = "ws-echo",
     .callback = callback_ws,
     .per_session_data_size = sizeof(struct session),
-    .rx_buffer_size = MAX_MESSAGE,
+    .rx_buffer_size = 1024,
   },
   LWS_PROTOCOL_LIST_TERM
 };
@@ -68,8 +68,24 @@ static int callback_ws(struct lws *wsi,
     lws_callback_on_writable(wsi);
     break;
 
-  case LWS_CALLBACK_RECEIVE:
+  case LWS_CALLBACK_RECEIVE: {
+    if (!hdl || !in || len < sizeof(struct ws_wire_msg_s)) {
+      break;
+    }
+
+
+    struct ws_wire_msg_s *msg = (struct ws_wire_msg_s *)in;
+    if (msg->tag == WS_TAG_MOUSE &&
+        msg->len >= sizeof(struct ws_wire_data_mouse_s) &&
+        len >= sizeof(struct ws_wire_msg_s) + sizeof(struct ws_wire_data_mouse_s)) {
+      struct ws_wire_data_mouse_s *mouse = (struct ws_wire_data_mouse_s *)msg->data;
+      hdl->mouse.x = mouse->x;
+      hdl->mouse.y = mouse->y;
+      hdl->mouse.btn = mouse->btn;
+      //printf("Mouse data updated\n");
+    }
     break;
+  }
 
   case LWS_CALLBACK_SERVER_WRITEABLE: {
     if (!hdl || !hdl->disp.frame_buf) {
@@ -224,6 +240,17 @@ int32_t ws_display_update_rec(uintptr_t handle,
 
   lws_callback_on_writable_all_protocol(ws->context, &protocols[1]);
 
+  return 0;
+}
+
+int32_t ws_get_mouse(uintptr_t handle, struct ws_wire_data_mouse_s* mouse_data_out) {
+  /* 1. Handle and structure sanity checks */
+  if (0 == handle || NULL == mouse_data_out) {
+    return (-1);
+  }
+
+  struct ws_object *ws = (struct ws_object *)handle;
+  memcpy(mouse_data_out, &ws->mouse, sizeof(struct ws_wire_data_mouse_s));
   return 0;
 }
 
