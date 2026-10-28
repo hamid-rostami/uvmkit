@@ -5,7 +5,7 @@ project(linux-uvmkit-host
         DESCRIPTION "Linux UVMKIT host"
         LANGUAGES C ASM)
 
-find_package(raylib CONFIG REQUIRED)
+#find_package(raylib CONFIG REQUIRED)
 find_package(libwebsockets CONFIG REQUIRED)
 
 add_subdirectory("../../" uvmkit)
