@@ -4,22 +4,16 @@
 
 #include "uvm32.h"
 
-uvm32_state_t* uvm32_init_from_file(char *path, int32_t *error) {
+int32_t uvm32_init_from_file(uvm32_state_t* vmst, char *path) {
   int32_t err = 0;
   FILE *f = NULL;
-  uvm32_state_t* vmst = NULL;
 
   do {
-    if (NULL == path) {
+    if (NULL == vmst || NULL == path) {
       err = -1;
       break;
     }
 
-    vmst = malloc(sizeof(uvm32_state_t));
-    if (NULL == vmst) {
-      err = -2;
-      break;
-    }
     uvm32_init(vmst);
 
     /* Open the file */
@@ -75,10 +69,5 @@ uvm32_state_t* uvm32_init_from_file(char *path, int32_t *error) {
     fclose(f);
   }
 
-  if ((NULL != vmst) && (0 != err)) {
-    free(vmst);
-    vmst = NULL;
-  }
-
-  return vmst;
+  return err;
 }

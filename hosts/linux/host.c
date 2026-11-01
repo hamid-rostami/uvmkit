@@ -262,8 +262,16 @@ int main(int argc, char *argv[]) {
   }
 
   int32_t err = 0;
-  uvm32_state_t *vmst = uvm32_init_from_file(argv[optind], &err);
-  assert((NULL != vmst) && (0 == err)); // FIXME
+  uvm32_state_t *vmst = malloc(sizeof(uvm32_state_t));
+  if (NULL == vmst) {
+    fprintf(stderr, "Faile to allocate memory for vm\n");
+    exit(EXIT_FAILURE);
+  }
+  int32_t ret = uvm32_init_from_file(vmst, argv[optind]);
+  if (0 != ret) {
+    fprintf(stderr, "Faile to load binary: %d\n", ret);
+    exit(EXIT_FAILURE);
+  }
 
   if (debug) {
     run_gdbstub(vmst);

@@ -14,7 +14,7 @@ idf_component_register(
 )
 
 target_compile_definitions(${COMPONENT_LIB} PUBLIC
-    UVM32_MEMORY_SIZE=${CONFIG_UVMKIT_UVM32_MEMORY_SIZE}
+    UVM32_MEMORY_SIZE=${CONFIG_UVM32_MEMORY_SIZE}
     UVM32_ERROR_STRINGS
 )
 
