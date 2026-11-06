@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>UVMKit Display</title>
+    <style>
+      body {
+          font-family: sans-serif;
+          background: #111;
+          color: #eee;
+          margin: 20px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+      }
+      canvas {
+          border: 2px solid #444;
+          image-rendering: pixelated;
+          touch-action: none;
+          width: 480px;
+          height: 270px;
+      }
+      #status {
+          margin-top: 10px;
+          font-size: 14px;
+          color: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>UVMKit Display</h2>
+    <input type="file" id="file" disabled>
+    <canvas id="screen" width="240" height="135"></canvas>
+    <div id="status">Connecting...</div>
+
+    <script>
+      var Module = {
+          onRuntimeInitialized() {
+              document.getElementById('file').disabled = false;   // enable once Wasm is ready
+          }
+      };
+      const canvas = document.getElementById("screen");
+      const status = document.getElementById("status");
+
+      // Keep the latest canvas mouse state available to the WASM host.
+      globalThis.uvmkitMouse = { x: 0, y: 0, buttons: 0 };
+
+      function updateMouseState(event, buttons = event.buttons) {
+          const rect = canvas.getBoundingClientRect();
+          const scaleX = canvas.width / rect.width;
+          const scaleY = canvas.height / rect.height;
+
+          globalThis.uvmkitMouse.x = Math.max(
+              0, Math.min(canvas.width - 1,
+                         Math.floor((event.clientX - rect.left) * scaleX)));
+          globalThis.uvmkitMouse.y = Math.max(
+              0, Math.min(canvas.height - 1,
+                         Math.floor((event.clientY - rect.top) * scaleY)));
+
+          // Touch pointers do not consistently report event.buttons.
+          const pressed = event.pointerType === "touch"
+              ? event.pressure > 0
+              : (buttons & 1) !== 0;
+          globalThis.uvmkitMouse.buttons = pressed ? 1 : 0;
+      }
+
+      canvas.addEventListener("pointermove", updateMouseState);
+      canvas.addEventListener("pointerdown", (event) => {
+          canvas.setPointerCapture(event.pointerId);
+          updateMouseState(event, 1);
+      });
+      canvas.addEventListener("pointerup", (event) => {
+          updateMouseState(event, 0);
+          canvas.releasePointerCapture(event.pointerId);
+      });
+      canvas.addEventListener("pointerleave", (event) => {
+          updateMouseState(event, 0);
+      });
+      canvas.addEventListener("pointercancel", (event) => {
+          updateMouseState(event, 0);
+      });
+
+      document.getElementById('file').addEventListener('change', async (e) => {
+          const file = e.target.files[0];
+          if (!file || file.size === 0) return;
+
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          console.log("File size:", file.size);
+          const ptr = Module._malloc(bytes.length);     // allocate inside Wasm memory
+          Module.HEAPU8.set(bytes, ptr);                // copy the file bytes in
+          Module._load_image(ptr, bytes.length);         // C now owns the buffer
+      });
+    </script>
+    {{{ SCRIPT }}}
+  </body>
+</html>
