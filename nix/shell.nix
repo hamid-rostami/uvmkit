@@ -1,11 +1,5 @@
-# Bare-metal RISC-V rv32ima toolchain: GCC + binutils + newlib-nano
-# Works with plain `nix-shell`, no experimental features required.
-#
-# Pinning: replace the URL with a specific commit for reproducibility, e.g.
-#   fetchTarball {
-#     url = "https://github.com/NixOS/nixpkgs/archive/<commit>.tar.gz";
-#     sha256 = "<hash>";   # get it with: nix-prefetch-url --unpack <url>
-#   }
+# Run like this: `nix-shell --pure nix.shell`
+
 { nixpkgs ? fetchTarball "https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz" }:
 
 let
@@ -22,20 +16,37 @@ let
     };
   };
 in
-cross.mkShell {
+
+pkgs.mkShell {
+  # Build tools executing on the host machine
   nativeBuildInputs = [
+    # RISC-V cross-compiler toolchain (binaries prefixed with riscv32-none-elf-)
     cross.stdenv.cc            # riscv32-none-elf-gcc / g++
     cross.stdenv.cc.bintools   # riscv32-none-elf-as, -ld, -objdump, ...
+
+    # Host build tools (native gcc / binutils are provided automatically by pkgs.stdenv)
+    pkgs.pkg-config
     pkgs.gnumake
     pkgs.cmake
-    # pkgs.qemu                  # qemu-system-riscv32 for testing
+    pkgs.emscripten
 
     # Optional (built from source, slow):
     # cross.buildPackages.gdb  # riscv32-none-elf-gdb
   ];
 
+  # Host target libraries and headers (CMake & pkg-config discover these automatically)
+  buildInputs = [
+    pkgs.libwebsockets
+  ];
+
   shellHook = ''
-    echo "RISC-V rv32ima toolchain ready:"
-    riscv32-none-elf-gcc --version | head -n1
+    echo "=== Development Environment Ready ==="
+    echo "  Native GCC: $(gcc --version | head -n1)"
+    echo "  RISC-V GCC: $(riscv32-none-elf-gcc --version | head -n1)"
+    echo "  Emscripten: $(emcc --version | head -n1)"
+    echo "======================================"
+    export RISCV_CC=${cross.stdenv.cc}/bin/riscv32-none-elf-gcc
+    export NATIVE_CC=${pkgs.stdenv.cc}/bin/cc
+    export NATIVE_CXX=${pkgs.stdenv.cc}/bin/c++
   '';
 }
