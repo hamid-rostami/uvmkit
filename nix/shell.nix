@@ -40,13 +40,22 @@ pkgs.mkShell {
   ];
 
   shellHook = ''
-    echo "=== Development Environment Ready ==="
-    echo "  Native GCC: $(gcc --version | head -n1)"
-    echo "  RISC-V GCC: $(riscv32-none-elf-gcc --version | head -n1)"
-    echo "  Emscripten: $(emcc --version | head -n1)"
-    echo "======================================"
+    export UVMKIT_PATH="${toString ../.}"
+    export UVMKIT_BASE_DIR="$UVMKIT_PATH/app/base"
+    export CMAKE_TOOLCHAIN_FILE="$UVMKIT_BASE_DIR/riscv-toolchain-nix.cmake"
     export RISCV_CC=${cross.stdenv.cc}/bin/riscv32-none-elf-gcc
     export NATIVE_CC=${pkgs.stdenv.cc}/bin/cc
     export NATIVE_CXX=${pkgs.stdenv.cc}/bin/c++
+
+    echo "=== UVMKit Development Environment Ready ==="
+    echo "  UVMKIT_PATH:        $UVMKIT_PATH"
+    echo "  Toolchain File:     $CMAKE_TOOLCHAIN_FILE"
+    echo "  RISC-V GCC:         $(${cross.stdenv.cc}/bin/riscv32-none-elf-gcc --version | head -n1)"
+    echo "  Native GCC:         $(gcc --version | head -n1)"
+    echo "  Emscripten:         $(emcc --version | head -n1)"
+    echo "============================================="
+    echo "To compile an application from any directory:"
+    echo "  cmake -B build && cmake --build build"
+    echo ""
   '';
 }

@@ -14,7 +14,22 @@ set(LV_BUILD_CONF_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/lv_conf.h"
     CACHE PATH "" FORCE)
 
-add_subdirectory(../base base)
+# Locate UVMKit base
+if(NOT DEFINED UVMKIT_PATH)
+    if(DEFINED ENV{UVMKIT_PATH})
+        set(UVMKIT_PATH "$ENV{UVMKIT_PATH}")
+    elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../base/CMakeLists.txt")
+        get_filename_component(UVMKIT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+    else()
+        message(FATAL_ERROR
+            "Could not locate UVMKit!\n"
+            "Please enter the nix-shell (nix-shell <path-to-uvmkit>/nix/shell.nix) "
+            "or set UVMKIT_PATH."
+        )
+    endif()
+endif()
+
+add_subdirectory("${UVMKIT_PATH}/app/base" uvmkit_base)
 
 add_subdirectory(lvgl lvgl)
 target_link_libraries(lvgl PUBLIC crt0)
